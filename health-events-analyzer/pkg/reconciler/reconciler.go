@@ -74,18 +74,15 @@ func NewReconciler(cfg HealthEventsAnalyzerReconcilerConfig) *Reconciler {
 	}
 }
 
-func newEventProcessorConfig(reconcilerCfg ...HealthEventsAnalyzerReconcilerConfig) client.EventProcessorConfig {
-	workers := 1
-	maxInFlight := 1000
+func newEventProcessorConfig(cfg HealthEventsAnalyzerReconcilerConfig) client.EventProcessorConfig {
+	workers := cfg.Workers
+	if workers <= 0 {
+		workers = 1
+	}
 
-	if len(reconcilerCfg) > 0 {
-		if reconcilerCfg[0].Workers > 0 {
-			workers = reconcilerCfg[0].Workers
-		}
-
-		if reconcilerCfg[0].MaxInFlight > 0 {
-			maxInFlight = reconcilerCfg[0].MaxInFlight
-		}
+	maxInFlight := cfg.MaxInFlight
+	if maxInFlight <= 0 {
+		maxInFlight = 1000
 	}
 
 	// Keep the stream live after handler failures. The processor records the
