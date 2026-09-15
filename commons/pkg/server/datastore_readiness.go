@@ -20,10 +20,9 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-
-	"github.com/nvidia/nvsentinel/store-client/pkg/lagstate"
 )
 
 const (
@@ -34,12 +33,18 @@ const (
 		"completed its initial batch, 0 otherwise."
 )
 
+// LagStateProvider reports change-stream lag timestamps. It matches lagstate.Provider
+// from store-client without introducing a cross-module package dependency.
+type LagStateProvider interface {
+	LagState() (lastEmptyBatch, lastEventRead time.Time)
+}
+
 // DatastoreReadinessChecker reports readiness based on change stream watcher lag state.
 // It implements ReadinessChecker for server.WithReadinessCheck, controller-runtime healthz.Checker
 // for mgr.AddReadyzCheck, and prometheus.Collector for exporting the datastore_connected gauge.
 type DatastoreReadinessChecker struct {
 	mu       sync.RWMutex
-	provider lagstate.Provider
+	provider LagStateProvider
 	desc     *prometheus.Desc
 }
 
@@ -75,21 +80,21 @@ func NewDatastoreReadinessChecker(reg prometheus.Registerer) *DatastoreReadiness
 	return checker
 }
 
-// SetLagProvider sets the lagstate.Provider used to determine datastore connectivity.
-func (c *DatastoreReadinessChecker) SetLagProvider(provider lagstate.Provider) {
+// SetLagProvider sets the LagStateProvider used to determine datastore connectivity.
+func (c *DatastoreReadinessChecker) SetLagProvider(provider LagStateProvider) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.provider = provider
 }
 
-// SetWatcher sets the watcher, extracting its lagstate.Provider directly or by unwrapping.
+// SetWatcher sets the watcher, extracting its LagStateProvider directly or by unwrapping.
 func (c *DatastoreReadinessChecker) SetWatcher(watcher any) {
 	if watcher == nil {
 		return
 	}
 
-	if provider, ok := watcher.(lagstate.Provider); ok {
+	if provider, ok := watcher.(LagStateProvider); ok {
 		c.SetLagProvider(provider)
 
 		return
