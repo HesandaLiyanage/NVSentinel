@@ -63,9 +63,13 @@ func NewDatastoreReadinessChecker(reg prometheus.Registerer) *DatastoreReadiness
 
 	if err := reg.Register(checker); err != nil {
 		var alreadyRegistered prometheus.AlreadyRegisteredError
-		if !errors.As(err, &alreadyRegistered) {
-			slog.Warn("Failed to register datastore_connected metric", "error", err)
+		if errors.As(err, &alreadyRegistered) {
+			if existing, ok := alreadyRegistered.ExistingCollector.(*DatastoreReadinessChecker); ok {
+				return existing
+			}
 		}
+
+		slog.Warn("Failed to register datastore_connected metric", "error", err)
 	}
 
 	return checker

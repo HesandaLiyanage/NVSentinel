@@ -141,7 +141,12 @@ func TestDatastoreReadinessChecker_DuplicateRegistration(t *testing.T) {
 	checker1 := NewDatastoreReadinessChecker(reg)
 	require.NotNil(t, checker1)
 
-	// Creating a second checker on the same registry should not panic or fail
+	// Creating a second checker on the same registry returns the existing collector
 	checker2 := NewDatastoreReadinessChecker(reg)
 	require.NotNil(t, checker2)
+	assert.Same(t, checker1, checker2)
+
+	// Updating checker2 updates the registered collector
+	checker2.SetLagProvider(fakeLagProvider{lastEmptyBatch: time.Now()})
+	assert.Equal(t, float64(1), testutil.ToFloat64(checker1))
 }
