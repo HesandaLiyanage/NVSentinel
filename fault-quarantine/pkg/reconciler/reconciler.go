@@ -176,6 +176,7 @@ func (r *Reconciler) SetEventWatcher(eventWatcher eventwatcher.EventWatcherInter
 	r.eventWatcher = eventWatcher
 }
 
+// SetReadinessChecker configures the datastore readiness checker.
 func (r *Reconciler) SetReadinessChecker(checker *server.DatastoreReadinessChecker) {
 	r.readinessChecker = checker
 }
