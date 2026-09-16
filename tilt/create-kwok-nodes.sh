@@ -22,15 +22,29 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NODE_TEMPLATE="$SCRIPT_DIR/kwok-node-template.yaml"
 KATA_NODE_TEMPLATE="$SCRIPT_DIR/kwok-kata-test-node-template.yaml"
 
-echo "Creating $NUM_GPU_NODES regular KWOK GPU nodes..."
+# Detect architecture and normalize for Kubernetes, matching tilt/Tiltfile
+ARCH=$(uname -m)
+case "$ARCH" in
+    arm64|aarch64)
+        K8S_ARCH="arm64"
+        ;;
+    x86_64|amd64)
+        K8S_ARCH="amd64"
+        ;;
+    *)
+        K8S_ARCH="amd64"
+        ;;
+esac
+
+echo "Creating $NUM_GPU_NODES regular KWOK GPU nodes (arch: $K8S_ARCH)..."
 for i in $(seq 0 $((NUM_GPU_NODES - 1))); do
-    sed "s/PLACEHOLDER/$i/g" "$NODE_TEMPLATE" | kubectl apply -f - >/dev/null
+    sed -e "s/PLACEHOLDER/$i/g" -e "s/amd64/$K8S_ARCH/g" "$NODE_TEMPLATE" | kubectl apply -f - >/dev/null
 done
 echo "Created $NUM_GPU_NODES regular KWOK GPU nodes"
 
-echo "Creating $NUM_KATA_TEST_NODES KWOK Kata test nodes..."
+echo "Creating $NUM_KATA_TEST_NODES KWOK Kata test nodes (arch: $K8S_ARCH)..."
 for i in $(seq 0 $((NUM_KATA_TEST_NODES - 1))); do
-    sed "s/PLACEHOLDER/$i/g" "$KATA_NODE_TEMPLATE" | kubectl apply -f - >/dev/null
+    sed -e "s/PLACEHOLDER/$i/g" -e "s/amd64/$K8S_ARCH/g" "$KATA_NODE_TEMPLATE" | kubectl apply -f - >/dev/null
 done
 echo "Created $NUM_KATA_TEST_NODES KWOK Kata test nodes"
 
