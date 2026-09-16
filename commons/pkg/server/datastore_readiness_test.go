@@ -36,14 +36,6 @@ func (f fakeLagProvider) LagState() (lastEmptyBatch, lastEventRead time.Time) {
 	return f.lastEmptyBatch, f.lastEventRead
 }
 
-type wrappedLagProvider struct {
-	inner any
-}
-
-func (w wrappedLagProvider) Unwrap() any {
-	return w.inner
-}
-
 func TestDatastoreReadinessChecker_Lifecycle(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	checker := NewDatastoreReadinessChecker(reg)
@@ -79,12 +71,12 @@ func TestDatastoreReadinessChecker_SetWatcher(t *testing.T) {
 	checker.SetWatcher(nil)
 	assert.Error(t, checker.Ready(ctx))
 
-	// Set unwrappable watcher
-	wrapped := wrappedLagProvider{
-		inner: fakeLagProvider{},
-	}
-	checker.SetWatcher(wrapped)
+	// Set non-provider object (does not set provider)
+	checker.SetWatcher("not-a-provider")
+	assert.Error(t, checker.Ready(ctx))
 
+	// Set valid watcher satisfying LagStateProvider
+	checker.SetWatcher(fakeLagProvider{})
 	assert.NoError(t, checker.Ready(ctx))
 	assert.Equal(t, float64(1), testutil.ToFloat64(checker))
 }

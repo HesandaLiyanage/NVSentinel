@@ -83,7 +83,7 @@ func (c *DatastoreReadinessChecker) SetLagProvider(provider LagStateProvider) {
 	c.provider = provider
 }
 
-// SetWatcher sets the watcher, extracting its LagStateProvider directly or by unwrapping.
+// SetWatcher sets the watcher, extracting its LagStateProvider.
 func (c *DatastoreReadinessChecker) SetWatcher(watcher any) {
 	if watcher == nil {
 		return
@@ -91,16 +91,6 @@ func (c *DatastoreReadinessChecker) SetWatcher(watcher any) {
 
 	if provider, ok := watcher.(LagStateProvider); ok {
 		c.SetLagProvider(provider)
-
-		return
-	}
-
-	type unwrapper interface {
-		Unwrap() any
-	}
-
-	if u, ok := watcher.(unwrapper); ok {
-		c.SetWatcher(u.Unwrap())
 	}
 }
 
