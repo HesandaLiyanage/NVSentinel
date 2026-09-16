@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/nvidia/nvsentinel/commons/pkg/server"
@@ -46,15 +45,8 @@ func TestReconciler_ReadinessChecker(t *testing.T) {
 	err := checker.Ready(ctx)
 	require.Error(t, err)
 
-	// Simulating setupChangeStreamWatcher completing with a watcher that hasn't polled
+	// Simulating setupChangeStreamWatcher completing with a connected watcher
 	r.readinessChecker.SetWatcher(fakeLagWatcher{})
-
-	err = checker.Ready(ctx)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "awaiting first poll")
-
-	// Simulating watcher having polled an empty batch
-	r.readinessChecker.SetWatcher(fakeLagWatcher{lastEmptyBatch: time.Now()})
 
 	err = checker.Ready(ctx)
 	require.NoError(t, err)

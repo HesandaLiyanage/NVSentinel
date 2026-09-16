@@ -59,16 +59,8 @@ func TestDatastoreReadinessChecker_Lifecycle(t *testing.T) {
 	require.Error(t, checkErr)
 	assert.Contains(t, checkErr.Error(), "datastore watcher initializing")
 
-	// 2. Provider set, but zero timestamps (watcher has not polled yet): returns error, metric is 0
+	// 2. Provider set (watcher connected): ready, metric is 1
 	checker.SetLagProvider(fakeLagProvider{})
-
-	err = checker.Ready(ctx)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "datastore watcher awaiting first poll")
-	assert.Equal(t, float64(0), testutil.ToFloat64(checker))
-
-	// 3. Provider records empty batch (caught up / initial read completed with 0 events): ready
-	checker.SetLagProvider(fakeLagProvider{lastEmptyBatch: time.Now()})
 
 	err = checker.Ready(ctx)
 	require.NoError(t, err)
@@ -76,13 +68,6 @@ func TestDatastoreReadinessChecker_Lifecycle(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	assert.NoError(t, checker.Check(req))
-
-	// 4. Provider records event read: ready
-	checker.SetLagProvider(fakeLagProvider{lastEventRead: time.Now()})
-
-	err = checker.Ready(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, float64(1), testutil.ToFloat64(checker))
 }
 
 func TestDatastoreReadinessChecker_SetWatcher(t *testing.T) {
@@ -96,7 +81,7 @@ func TestDatastoreReadinessChecker_SetWatcher(t *testing.T) {
 
 	// Set unwrappable watcher
 	wrapped := wrappedLagProvider{
-		inner: fakeLagProvider{lastEmptyBatch: time.Now()},
+		inner: fakeLagProvider{},
 	}
 	checker.SetWatcher(wrapped)
 
@@ -117,7 +102,7 @@ func TestDatastoreReadinessChecker_ServerIntegration(t *testing.T) {
 	concreteSrv, ok := srv.(*server)
 	require.True(t, ok)
 
-	// Before watcher completes initial batch: /healthz is 200, /readyz is 503
+	// Before watcher connects: /healthz is 200, /readyz is 503
 	recHealthz := httptest.NewRecorder()
 	reqHealthz := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	concreteSrv.mux.ServeHTTP(recHealthz, reqHealthz)
@@ -128,8 +113,8 @@ func TestDatastoreReadinessChecker_ServerIntegration(t *testing.T) {
 	concreteSrv.mux.ServeHTTP(recReadyz, reqReadyz)
 	assert.Equal(t, http.StatusServiceUnavailable, recReadyz.Code)
 
-	// After watcher completes initial batch: /readyz flips to 200
-	checker.SetLagProvider(fakeLagProvider{lastEmptyBatch: time.Now()})
+	// After watcher connects: /readyz flips to 200
+	checker.SetLagProvider(fakeLagProvider{})
 
 	recReadyz2 := httptest.NewRecorder()
 	concreteSrv.mux.ServeHTTP(recReadyz2, reqReadyz)

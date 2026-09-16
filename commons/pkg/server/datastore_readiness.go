@@ -29,8 +29,7 @@ const (
 	// DatastoreConnectedMetricName is the Prometheus metric reporting datastore readiness.
 	DatastoreConnectedMetricName = "datastore_connected"
 
-	datastoreConnectedHelp = "Reports 1 if the datastore watcher has connected and " +
-		"completed its initial batch, 0 otherwise."
+	datastoreConnectedHelp = "Reports 1 if the datastore watcher has connected, 0 otherwise."
 )
 
 // LagStateProvider reports change-stream lag timestamps. It matches lagstate.Provider
@@ -109,8 +108,8 @@ func (c *DatastoreReadinessChecker) SetWatcher(watcher any) {
 	}
 }
 
-// Ready implements ReadinessChecker. It reports ready only after the datastore watcher
-// has established connection and completed its first poll (empty batch or event read).
+// Ready implements ReadinessChecker. It reports ready once the datastore watcher
+// has established connection.
 func (c *DatastoreReadinessChecker) Ready(_ context.Context) error {
 	c.mu.RLock()
 	provider := c.provider
@@ -118,11 +117,6 @@ func (c *DatastoreReadinessChecker) Ready(_ context.Context) error {
 
 	if provider == nil {
 		return errors.New("datastore watcher initializing")
-	}
-
-	lastEmptyBatch, lastEventRead := provider.LagState()
-	if lastEmptyBatch.IsZero() && lastEventRead.IsZero() {
-		return errors.New("datastore watcher awaiting first poll")
 	}
 
 	return nil
