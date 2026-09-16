@@ -25,12 +25,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const (
-	// DatastoreConnectedMetricName is the Prometheus metric reporting datastore readiness.
-	DatastoreConnectedMetricName = "datastore_connected"
-
-	datastoreConnectedHelp = "Reports 1 if the datastore watcher has connected, 0 otherwise."
-)
+// DatastoreConnectedMetricName is the Prometheus metric reporting datastore readiness.
+const DatastoreConnectedMetricName = "datastore_connected"
 
 // LagStateProvider reports change-stream lag timestamps. It matches lagstate.Provider
 // from store-client without introducing a cross-module package dependency.
@@ -56,7 +52,7 @@ func NewDatastoreReadinessChecker(reg prometheus.Registerer) *DatastoreReadiness
 
 	desc := prometheus.NewDesc(
 		DatastoreConnectedMetricName,
-		datastoreConnectedHelp,
+		"Reports 1 if the datastore watcher has connected, 0 otherwise.",
 		nil,
 		nil,
 	)
