@@ -64,6 +64,18 @@ func loadRulesFromValuesYAML(t *testing.T, path string) *config.TomlConfig {
 
 	tomlSection := content[idx+len(configMarker):]
 
+	// If this is a multisection values file (like values-tilt.yaml), truncate at the
+	// next top-level unindented key.
+	var tomlLines []string
+	for _, line := range strings.Split(tomlSection, "\n") {
+		if len(line) > 0 && !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") && !strings.HasPrefix(line, "#") {
+			break
+		}
+
+		tomlLines = append(tomlLines, line)
+	}
+	tomlSection = strings.Join(tomlLines, "\n")
+
 	// Replace Helm template expressions like {{ .Values.foo }} with true so TOML parses cleanly.
 	templateRegex := regexp.MustCompile(`\{\{[^}]*\}\}`)
 	cleanTOML := templateRegex.ReplaceAllString(tomlSection, "true")
@@ -82,68 +94,65 @@ func loadRulesFromValuesYAML(t *testing.T, path string) *config.TomlConfig {
 	return cfg
 }
 
-// TestRulesFirstStageBoundsGeneratedTimestamp verifies that every shipped rule in the
-// health-events-analyzer Helm chart opens with a stage bounding generatedtimestamp,
+func configSources(repoRoot string) []struct {
+	name string
+	path string
+} {
+	return []struct {
+		name string
+		path string
+	}{
+		{
+			name: "chart values.yaml",
+			path: filepath.Join(
+				repoRoot, "distros", "kubernetes", "nvsentinel", "charts", "health-events-analyzer", "values.yaml",
+			),
+		},
+		{
+			name: "tilt values-tilt.yaml",
+			path: filepath.Join(
+				repoRoot, "distros", "kubernetes", "nvsentinel", "values-tilt.yaml",
+			),
+		},
+	}
+}
+
+// TestRulesFirstStageBoundsGeneratedTimestamp verifies that every shipped rule in both the
+// chart values.yaml and values-tilt.yaml opens with a stage bounding generatedtimestamp,
 // preventing unbounded historical event scans (per Issue #1838).
 func TestRulesFirstStageBoundsGeneratedTimestamp(t *testing.T) {
 	repoRoot := findRepoRoot(t)
-	chartValuesPath := filepath.Join(
-		repoRoot,
-		"distros", "kubernetes", "nvsentinel", "charts", "health-events-analyzer", "values.yaml",
-	)
 
-	cfg := loadRulesFromValuesYAML(t, chartValuesPath)
-	require.NotEmpty(t, cfg.Rules, "expected at least one rule in values.yaml")
+	for _, source := range configSources(repoRoot) {
+		t.Run(source.name, func(t *testing.T) {
+			cfg := loadRulesFromValuesYAML(t, source.path)
+			require.NotEmpty(t, cfg.Rules, "expected at least one rule in %s", source.name)
 
-	for _, rule := range cfg.Rules {
-		t.Run(rule.Name, func(t *testing.T) {
-			require.NotEmpty(t, rule.Stage, "rule %s must define at least one stage", rule.Name)
+			for _, rule := range cfg.Rules {
+				t.Run(rule.Name, func(t *testing.T) {
+					require.NotEmpty(t, rule.Stage, "rule %s must define at least one stage", rule.Name)
 
-			firstStage := rule.Stage[0]
-			assert.Contains(
-				t,
-				firstStage,
-				"healthevent.generatedtimestamp.seconds",
-				"Rule %q must bound generatedtimestamp in its first stage to avoid unbounded scans",
-				rule.Name,
-			)
+					firstStage := rule.Stage[0]
+					assert.Contains(
+						t,
+						firstStage,
+						"healthevent.generatedtimestamp.seconds",
+						"Rule %q in %s must bound generatedtimestamp in its first stage to avoid unbounded scans",
+						rule.Name,
+						source.name,
+					)
+				})
+			}
 		})
 	}
 }
 
 // TestXID74Reg2Bit13SetRuleStructure verifies that XID74Reg2Bit13Set has both the 24h
-// time bound in stage 0 and the terminal $limit 1 stage, and that all stages parse cleanly.
+// time bound in stage 0 and the terminal $limit 1 stage in both values.yaml and values-tilt.yaml,
+// and that all stages parse cleanly.
 func TestXID74Reg2Bit13SetRuleStructure(t *testing.T) {
 	repoRoot := findRepoRoot(t)
-	chartValuesPath := filepath.Join(
-		repoRoot,
-		"distros", "kubernetes", "nvsentinel", "charts", "health-events-analyzer", "values.yaml",
-	)
 
-	cfg := loadRulesFromValuesYAML(t, chartValuesPath)
-
-	var targetRule *config.HealthEventsAnalyzerRule
-	for i := range cfg.Rules {
-		if cfg.Rules[i].Name == "XID74Reg2Bit13Set" {
-			targetRule = &cfg.Rules[i]
-			break
-		}
-	}
-
-	require.NotNil(t, targetRule, "XID74Reg2Bit13Set rule not found in values.yaml")
-
-	// Must have 5 stages: time bound, errorcode 74 match, registers addFields, bit-13 match, limit 1.
-	require.Len(t, targetRule.Stage, 5)
-
-	// Stage 0: 24h time-bounding window
-	assert.Contains(t, targetRule.Stage[0], "healthevent.generatedtimestamp.seconds")
-	assert.Contains(t, targetRule.Stage[0], "86400")
-
-	// Terminal stage: $limit 1
-	lastStage := targetRule.Stage[len(targetRule.Stage)-1]
-	assert.Contains(t, lastStage, `"$limit"`)
-
-	// Verify all stages parse cleanly with a representative health event
 	sampleEvent := datamodels.HealthEventWithStatus{
 		HealthEvent: &protos.HealthEvent{
 			NodeName:  "test-gpu-node",
@@ -164,16 +173,44 @@ func TestXID74Reg2Bit13SetRuleStructure(t *testing.T) {
 		},
 	}
 
-	for i, stageStr := range targetRule.Stage {
-		parsed, err := parser.ParseSequenceStage(stageStr, sampleEvent)
-		require.NoError(t, err, "failed to parse stage %d: %s", i, stageStr)
-		require.NotEmpty(t, parsed, "stage %d parsed to empty map", i)
-	}
+	for _, source := range configSources(repoRoot) {
+		t.Run(source.name, func(t *testing.T) {
+			cfg := loadRulesFromValuesYAML(t, source.path)
 
-	// Validate parsed terminal limit stage specifically
-	limitParsed, err := parser.ParseSequenceStage(lastStage, sampleEvent)
-	require.NoError(t, err)
-	limitVal, ok := limitParsed["$limit"]
-	require.True(t, ok, "expected $limit key in parsed stage")
-	assert.Equal(t, float64(1), limitVal)
+			var targetRule *config.HealthEventsAnalyzerRule
+			for i := range cfg.Rules {
+				if cfg.Rules[i].Name == "XID74Reg2Bit13Set" {
+					targetRule = &cfg.Rules[i]
+					break
+				}
+			}
+
+			require.NotNil(t, targetRule, "XID74Reg2Bit13Set rule not found in %s", source.name)
+
+			// Must have 5 stages: time bound, errorcode 74 match, registers addFields, bit-13 match, limit 1.
+			require.Len(t, targetRule.Stage, 5)
+
+			// Stage 0: 24h time-bounding window
+			assert.Contains(t, targetRule.Stage[0], "healthevent.generatedtimestamp.seconds")
+			assert.Contains(t, targetRule.Stage[0], "86400")
+
+			// Terminal stage: $limit 1
+			lastStage := targetRule.Stage[len(targetRule.Stage)-1]
+			assert.Contains(t, lastStage, `"$limit"`)
+
+			// Verify all stages parse cleanly with a representative health event
+			for i, stageStr := range targetRule.Stage {
+				parsed, err := parser.ParseSequenceStage(stageStr, sampleEvent)
+				require.NoError(t, err, "failed to parse stage %d in %s: %s", i, source.name, stageStr)
+				require.NotEmpty(t, parsed, "stage %d in %s parsed to empty map", i, source.name)
+			}
+
+			// Validate parsed terminal limit stage specifically
+			limitParsed, err := parser.ParseSequenceStage(lastStage, sampleEvent)
+			require.NoError(t, err)
+			limitVal, ok := limitParsed["$limit"]
+			require.True(t, ok, "expected $limit key in parsed stage in %s", source.name)
+			assert.Equal(t, float64(1), limitVal)
+		})
+	}
 }
