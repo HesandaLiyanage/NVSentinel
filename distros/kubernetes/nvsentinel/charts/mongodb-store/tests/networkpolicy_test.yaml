@@ -118,3 +118,53 @@ tests:
       - equal:
           path: spec.ingress[1].from[1].podSelector.matchLabels["app.kubernetes.io/name"]
           value: prometheus
+
+  - it: allows scrape namespaces configured under legacy mongodb.networkPolicy
+    set:
+      useBitnami: false
+      usePerconaOperator: true
+      mongodb:
+        networkPolicy:
+          additionalScrapeNamespaces:
+            - monitoring
+    asserts:
+      - isKind:
+          of: NetworkPolicy
+      - equal:
+          path: spec.ingress[1].ports[0].port
+          value: 9216
+      - lengthEqual:
+          path: spec.ingress[1].from
+          count: 2
+      - equal:
+          path: spec.ingress[1].from[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]
+          value: nvsentinel
+      - equal:
+          path: spec.ingress[1].from[1].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]
+          value: monitoring
+
+  - it: allows scrape rules configured under legacy mongodb.networkPolicy
+    set:
+      useBitnami: false
+      usePerconaOperator: true
+      mongodb:
+        networkPolicy:
+          additionalScrapeRules:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: prometheus
+    asserts:
+      - isKind:
+          of: NetworkPolicy
+      - equal:
+          path: spec.ingress[1].ports[0].port
+          value: 9216
+      - lengthEqual:
+          path: spec.ingress[1].from
+          count: 2
+      - equal:
+          path: spec.ingress[1].from[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]
+          value: nvsentinel
+      - equal:
+          path: spec.ingress[1].from[1].podSelector.matchLabels["app.kubernetes.io/name"]
+          value: prometheus
