@@ -364,6 +364,27 @@ Image tag for the MongoDB exporter.
 
 The exporter exposes metrics on port 9216 for Prometheus scraping.
 
+### Network Policy
+
+Configures network policy ingress rules for MongoDB pods. The database port (`27017`) is always restricted to the NVSentinel release namespace. The metrics exporter port (`9216`) allows ingress from the release namespace by default and can permit additional monitoring namespaces or custom ingress rules.
+
+```yaml
+mongodb-store:
+  networkPolicy:
+    additionalScrapeNamespaces:
+      - monitoring
+      - prometheus
+    additionalScrapeRules: []
+```
+
+#### Parameters
+
+##### additionalScrapeNamespaces
+List of namespaces permitted to scrape the metrics exporter on port `9216`. Defaults to empty (`[]`). The release namespace is always permitted.
+
+##### additionalScrapeRules
+Custom ingress rules rendered directly under `from:` for the metrics exporter on port `9216`. Use this to match specific pod labels or IP blocks.
+
 ### Helper Images
 
 Container images used in init containers and sidecars.
