@@ -12,19 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-{{- $additionalScrapeNamespaces := list -}}
-{{- if and .Values.networkPolicy .Values.networkPolicy.additionalScrapeNamespaces -}}
-  {{- $additionalScrapeNamespaces = .Values.networkPolicy.additionalScrapeNamespaces -}}
-{{- else if and .Values.mongodb (and .Values.mongodb.networkPolicy .Values.mongodb.networkPolicy.additionalScrapeNamespaces) -}}
-  {{- $additionalScrapeNamespaces = .Values.mongodb.networkPolicy.additionalScrapeNamespaces -}}
-{{- end -}}
-{{- $additionalScrapeRules := list -}}
-{{- if and .Values.networkPolicy .Values.networkPolicy.additionalScrapeRules -}}
-  {{- $additionalScrapeRules = .Values.networkPolicy.additionalScrapeRules -}}
-{{- else if and .Values.mongodb (and .Values.mongodb.networkPolicy .Values.mongodb.networkPolicy.additionalScrapeRules) -}}
-  {{- $additionalScrapeRules = .Values.mongodb.networkPolicy.additionalScrapeRules -}}
-{{- end -}}
-
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -51,6 +38,18 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Release.Namespace }}
 {{- if .Values.usePerconaOperator }}
+{{- $additionalScrapeNamespaces := list }}
+{{- if and .Values.networkPolicy .Values.networkPolicy.additionalScrapeNamespaces }}
+  {{- $additionalScrapeNamespaces = .Values.networkPolicy.additionalScrapeNamespaces }}
+{{- else if and .Values.mongodb (and .Values.mongodb.networkPolicy .Values.mongodb.networkPolicy.additionalScrapeNamespaces) }}
+  {{- $additionalScrapeNamespaces = .Values.mongodb.networkPolicy.additionalScrapeNamespaces }}
+{{- end }}
+{{- $additionalScrapeRules := list }}
+{{- if and .Values.networkPolicy .Values.networkPolicy.additionalScrapeRules }}
+  {{- $additionalScrapeRules = .Values.networkPolicy.additionalScrapeRules }}
+{{- else if and .Values.mongodb (and .Values.mongodb.networkPolicy .Values.mongodb.networkPolicy.additionalScrapeRules) }}
+  {{- $additionalScrapeRules = .Values.mongodb.networkPolicy.additionalScrapeRules }}
+{{- end }}
     - ports:
         - port: 9216
           protocol: TCP
